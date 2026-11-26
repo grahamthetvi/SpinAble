@@ -435,7 +435,10 @@ skirt_t        = 3.6;   // spec wall thickness inside the 4 mm groove
 key_fit_w      = 7.6;   // spec key width inside the 8 mm notch
 key_end_clear  = 0.8;   // skirt key stops this short of the notch end
 skirt_chamfer  = 0.5;   // lead-in on the skirt bottom
-deck_foot_t    = 2.8;   // ring that actually sits on the deck
+deck_foot_t    = 2.8;   // ring above the skirt, beside the groove
+land_w         = 1.2;   // flat the housing rests on, just outside the groove.
+                        // Short enough to print as a ledge; a 45° chamfer
+                        // carries the rest of the ring out to full width.
 
 groove_r       = lock_ring_diameter / 2;
 skirt_r_in     = groove_r - skirt_t / 2;
@@ -473,7 +476,7 @@ wobble_top_z    = wobble_pocket_z + plug_undercut_h + plug_lip_t;
 
 // --- Up and down: 3-lobe face cam, off-centre sliding post ---
 cam_lift      = 8;                    // spec max 10
-cam_lobes     = 3;                    // 120° symmetry keeps the cam balanced
+cam_lobes     = 2;                    // 180° symmetry keeps the cam balanced; 3 lobes outrun gravity
 cam_r_in      = 12;
 cam_r_out     = 28;                   // under the 40 mm housing limit
 cam_z_low     = 16;                   // lowest track, above the centre boss
@@ -487,6 +490,7 @@ slide_d       = 8;
 sleeve_slop   = 0.25;                 // per side, free running, so a dry post cannot bind
 sleeve_id     = slide_d + 2 * sleeve_slop;
 sleeve_wall   = 3.2;
+sleeve_od     = sleeve_id + 2 * sleeve_wall;
 foot_od        = 14;                  // larger than the sleeve, so the foot stays captive
 foot_flange_h  = 3.2;
 foot_dome_r    = 6;                   // hemisphere; one contact point on the cam
@@ -498,7 +502,11 @@ cap_d         = 16;
 cap_h         = 3.2;
 guard_r_in    = 34;                   // clears the cam (28) and the foot (27)
 guard_t       = 3.2;
-sleeve_len    = 22;
+sleeve_ring   = 14;                   // full-round part of the sleeve
+// The sleeve's underside is a 45° slope, lowest on the side facing the
+// guard wall, so it grows out of the ribs with no support. The sloped
+// part still guides the post on three sides.
+sleeve_len    = sleeve_od + sleeve_ring;
 post_show     = 14;                   // how much post stays above the sleeve at rest
 
 cam_z_high      = cam_z_low + cam_lift;
@@ -518,7 +526,7 @@ tick_disc_r   = 26;
 tick_disc_t   = 4;
 tick_tooth_r  = 3.2;
 tick_tooth_rc = 28.8;                 // outer radius = 32
-tick_tooth_z0 = 1;
+tick_tooth_z0 = 0;                    // teeth start on the bed; the disc is narrower than they reach
 tick_tooth_h  = 6;
 tick_boss_h   = 12;
 tick_boss_r   = 9;
@@ -561,17 +569,24 @@ assert(shaft_len > sleeve_len, "Post pulls out of the sleeve at the bottom of th
 assert(guard_r_in >= cam_r_out + 4, "Lifter housing rubs the cam.");
 assert(tab_nose_rc - tab_nose_r > tick_disc_r + 2, "Ticker tab rubs the disc between teeth.");
 assert(plug_bore_d < plug_undercut_d, "Plug lugs have no lip to lock under.");
+assert(skirt_r_in - guard_r_in > deck_foot_t && skirt_r_in - tick_wall_in > deck_foot_t,
+       "Housing wall is too close to the skirt for the 45° floor.");
+
+// Gravity keeps the foot on the cam only while (lift/2)(lobes·ω)² < g.
+cam_rpm_max = 60 / (2 * PI) * sqrt(2 * 9.81 / (cam_lift / 1000)) / cam_lobes;
 
 echo(str("TOPS -> wobble pocket for ", wobble_nuts, " x M8 nuts at r ", wobble_mass_r,
          " mm (about ", wobble_nuts * 5, " g if each nut is ~5 g)."));
 echo(str("TOPS -> lift ", cam_lift, " mm, ", cam_lobes,
-         " lobes; follower at r ", track_r, " mm; sleeve id ", sleeve_id, " mm."));
+         " lobes; follower at r ", track_r, " mm; sleeve id ", sleeve_id,
+         " mm; foot leaves the cam above about ", round(cam_rpm_max), " RPM."));
 echo(str("TOPS -> ticker ", tick_teeth, " teeth, tab ", tab_t,
          " mm x ", tab_arc_len, " mm, est. peak ", tab_force_n,
          " N, ", tab_torque_kgcm, " kg·cm (motor stall is 0.44). PETG assumption."));
 
 // Locking skirt. z=0 is the skirt bottom.
 module lock_skirt(extra_h = 0) {
+  $fn = 128;
   difference() {
     cylinder(r = skirt_r_out, h = skirt_drop + extra_h);
     translate([0, 0, -eps]) cylinder(r = skirt_r_in, h = skirt_drop + extra_h + 2 * eps);
@@ -589,6 +604,36 @@ module lock_skirt(extra_h = 0) {
       translate([skirt_r_in, -key_fit_w / 2, 0])
         cube([key_r_end - skirt_r_in, key_fit_w, skirt_drop + extra_h]);
 }
+
+// Housing body above the skirt, as one turned profile (r, z):
+// the floor climbs at 45° from the top of the skirt inward to the wall,
+// so nothing is a flat ledge in mid-air. Outside the skirt there is a
+// short land that rests on the deck, then a 45° chamfer out to the ring.
+// z=0 is the skirt bottom, as in lock_skirt().
+module housing_body(wall_in, wall_out, wall_top) {
+  sd = skirt_drop;
+  rt = skirt_drop + deck_foot_t;
+  d  = skirt_r_in - wall_in;
+  wt = wall_out - wall_in;
+  ro = skirt_r_out + 3;
+  lr = skirt_r_out + land_w;
+  rotate_extrude($fn = 128)
+    polygon([
+      [skirt_r_in, sd],
+      [wall_in, sd + d],
+      [wall_in, wall_top],
+      [wall_out, wall_top],
+      [wall_out, sd + d],
+      [skirt_r_in + wt - (rt - sd), rt],
+      [ro, rt],
+      [ro, sd + (ro - lr)],
+      [lr, sd]
+    ]);
+}
+
+// Height of the outer 45° slope at radius r (for things set on it).
+function housing_outer_z(wall_in, wall_out, r) =
+  skirt_drop + (skirt_r_in - wall_in) - (r - wall_out);
 
 // Blind hex socket opening downward at z=0 (shoulder / bed).
 module hex_socket_from_bottom(depth) {
@@ -717,8 +762,9 @@ module cam() {
 //  The hole is open on the bed and bridges shut inside the dome, so
 //  the spigot has a floor and the contact surface stays smooth.
 //  Post datum (use): spigot tip at z=0. Print flips it, cap on the bed.
-//  Glue the spigot into the foot before class. The foot is wider than
-//  the sleeve, so the post cannot be pulled out the top afterwards.
+//  Assembly: drop the post spigot-first down through the sleeve, then
+//  glue the foot onto the spigot from underneath. The foot and the cap
+//  are both wider than the sleeve, so the post is then captive.
 // ---------------------------------------------------------------------
 module lifter_foot_print() {
   difference() {
@@ -754,46 +800,57 @@ module lifter_post() {
 module lifter_housing() {
   // Sleeve sits over the track, not on the axis: a centred foot would
   // bridge every lobe and never go down.
-  sleeve_z = skirt_drop + sleeve_bottom_d;
+  sleeve_z = skirt_drop + sleeve_bottom_d;   // lowest point of the sleeve
   guard_z  = skirt_drop + guard_top_d;
+  g_out    = guard_r_in + guard_t;
+  sr       = sleeve_od / 2;
+  ridge_out = g_out + 1.4;
+  ridge_z   = housing_outer_z(guard_r_in, g_out, ridge_out) - 0.3;
   difference() {
     union() {
       lock_skirt(eps);
-      translate([0, 0, skirt_drop])
-        difference() {
-          cylinder(r = skirt_r_out + 3, h = deck_foot_t);
-          translate([0, 0, -eps]) cylinder(r = guard_r_in, h = deck_foot_t + 2 * eps);
-        }
-      translate([0, 0, skirt_drop + deck_foot_t - eps])
-        difference() {
-          cylinder(r = guard_r_in + guard_t, h = guard_z - skirt_drop - deck_foot_t + eps);
-          translate([0, 0, -eps])
-            cylinder(r = guard_r_in, h = guard_z - skirt_drop - deck_foot_t + 3 * eps);
-        }
-      // ridges a student can feel: this top is the up-and-down one
+      housing_body(guard_r_in, g_out, guard_z);
+      // ridges a student can feel: this top is the up-and-down one.
+      // They start on the sloped floor, so their bottoms are inside it.
       for (a = [0:45:315])
         rotate([0, 0, a])
-          translate([guard_r_in + guard_t - 0.8, -1.4, skirt_drop + deck_foot_t])
-            cube([1.4 + 0.8, 2.8, guard_z - skirt_drop - deck_foot_t]);
-      translate([track_r, 0, sleeve_z - eps])
-        cylinder(d = sleeve_id + 2 * sleeve_wall, h = sleeve_len + eps);
-      // ribs from the sleeve out to the guard, fanned around the sleeve
-      for (a = [-50, 0, 50])
+          translate([g_out - 0.8, -1.4, ridge_z])
+            cube([ridge_out - g_out + 0.8, 2.8, guard_z - ridge_z]);
+      // sleeve, its underside cut at 45°: lowest at +x (toward the guard
+      // wall, where the middle rib meets it), highest facing the centre
+      intersection() {
+        translate([track_r, 0, sleeve_z]) cylinder(r = sr, h = sleeve_len);
+        translate([track_r, 0, sleeve_z])
+          rotate([90, 0, 0])
+            linear_extrude(height = sleeve_od + 2, center = true)
+              polygon([[sr + 1, -1], [sr + 1, sleeve_len + 1],
+                       [-sr - 1, sleeve_len + 1], [-sr - 1, 2 * sr + 1]]);
+      }
+      // ribs from the sleeve out to the guard, fanned around the sleeve.
+      // Each starts where the sleeve's sloped underside is, and its guard
+      // end drops by more than its reach, so the underside is steeper than 45°.
+      for (a = [-50, 0, 50]) {
+        s_pt  = [track_r + sr * cos(a), sr * sin(a)];
+        g_pt  = [guard_r_in * cos(a), guard_r_in * sin(a)];
+        s_z   = sleeve_z + sr * (1 - cos(a));
+        g_z   = s_z - (norm(g_pt - s_pt) + 1);
+        top_z = sleeve_z + sleeve_len;
         hull() {
-          translate([track_r, 0, sleeve_z - eps])
+          translate([track_r, 0, s_z])
             rotate([0, 0, a])
-              translate([sleeve_id / 2 + sleeve_wall - eps, -1.6, 0])
-                cube([eps, 3.2, sleeve_len + eps]);
+              translate([sr - eps, -1.6, 0])
+                cube([eps, 3.2, top_z - s_z]);
           rotate([0, 0, a])
-            translate([guard_r_in - eps, -1.6, sleeve_z - eps])
-              cube([guard_t + eps, 3.2, sleeve_len + eps]);
+            translate([guard_r_in - eps, -1.6, g_z])
+              cube([guard_t + eps, 3.2, top_z - g_z]);
         }
+      }
     }
-    translate([track_r, 0, sleeve_z - eps])
-      cylinder(d = sleeve_id, h = sleeve_len + 3 * eps);
-    // lead-in at the bottom of the sleeve
-    translate([track_r, 0, sleeve_z - eps])
-      cylinder(d1 = sleeve_id + 1.4, d2 = sleeve_id, h = 1);
+    translate([track_r, 0, sleeve_z - 1])
+      cylinder(d = sleeve_id, h = sleeve_len + 2);
+    // lead-in at the top: the post goes in from above, spigot first
+    translate([track_r, 0, sleeve_z + sleeve_len - 1 + eps])
+      cylinder(d1 = sleeve_id, d2 = sleeve_id + 1.4, h = 1);
   }
 }
 
@@ -832,31 +889,29 @@ module ticker_tab() {
 }
 
 module ticker_housing() {
-  socket_a0 = tab_root_a0 - 0.4;
-  socket_a1 = tab_root_a1 + 0.4;
+  // 0.1° per side is about 0.07 mm at the root: a light press.
+  socket_a0 = tab_root_a0 - 0.1;
+  socket_a1 = tab_root_a1 + 0.1;
+  socket_r1 = tab_root_r + 0.3;          // back wall stops the tab sliding outward
+  rt        = skirt_drop + deck_foot_t;
   difference() {
     union() {
       lock_skirt(eps);
-      translate([0, 0, skirt_drop])
-        difference() {
-          cylinder(r = skirt_r_out + 3, h = deck_foot_t);
-          translate([0, 0, -eps]) cylinder(r = tick_wall_in, h = deck_foot_t + 2 * eps);
-        }
-      translate([0, 0, skirt_drop + deck_foot_t - eps])
-        difference() {
-          cylinder(r = tick_wall_out, h = tab_wall_top - skirt_drop - deck_foot_t + eps);
-          translate([0, 0, -eps])
-            cylinder(r = tick_wall_in, h = tab_wall_top - skirt_drop - deck_foot_t + 3 * eps);
-        }
-      // short nubs, so this housing feels different from the ridged lifter
+      housing_body(tick_wall_in, tick_wall_out, tab_wall_top);
+      // short nubs, so this housing feels different from the ridged lifter.
+      // They start a little above the ring so their bottoms sit in the floor slope.
       for (a = [0:30:330])
         rotate([0, 0, a])
-          translate([tick_wall_out - 0.8, -1.2, skirt_drop + deck_foot_t])
+          translate([tick_wall_out - 0.8, -1.2, rt + 0.5])
             cube([1.6 + 0.8, 2.4, 4]);
+      // block outside the wall that closes the back of the tab socket
+      translate([0, 0, rt - 0.5])
+        annulus_sector(tick_wall_out - eps, socket_r1 + 2, socket_a0 - 3, socket_a1 + 3,
+                       tab_wall_top - rt + 0.5);
     }
     // drop-in socket, open at the top and toward the centre
     translate([0, 0, tab_z0 - 0.2])
-      annulus_sector(tick_wall_in - 1, tab_root_r + 0.3, socket_a0, socket_a1,
+      annulus_sector(tick_wall_in - 1, socket_r1, socket_a0, socket_a1,
                      tab_wall_top - tab_z0 + 2);
   }
 }

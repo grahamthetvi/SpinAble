@@ -37,12 +37,12 @@ The OpenSCAD console prints a **TOP INTERFACE SPEC** line with the numbers for y
 | Test spin disc | Disc on the bed | Any | Use a bright color for visual tracking. |
 | Wobble rotor | Disc on the bed, pocket open upward | PLA or PETG | Five bumps on top. |
 | Wobble plug | Flat | Same as the rotor | The bar is the grip for twisting it. |
-| Up-down cam | Shoulder on the bed, ramp upward | PLA or PETG | No supports. Three lobes, so it stays balanced. |
+| Up-down cam | Shoulder on the bed, ramp upward | PLA or PETG | No supports. Two lobes, so it stays balanced. |
 | Lifter foot | Flange on the bed, dome upward | PLA or PETG | The spigot hole bridges shut inside the dome. |
 | Lifter post | Cap on the bed | PLA or PETG | |
-| Lifter housing | Skirt on the bed | PLA or PETG | Tall print. The sleeve is held by three ribs. |
+| Lifter housing | Skirt on the bed | PLA or PETG | Tall print, no supports. The floor flares out at 45°, the three ribs climb out of the guard wall at 45°, and the sleeve's underside is sloped so it grows out of the ribs. |
 | Ticker rotor | Shoulder on the bed | PLA or PETG | Ten rounded teeth. |
-| Ticker housing | Skirt on the bed | PLA or PETG | Short nubs around the outside. |
+| Ticker housing | Skirt on the bed | PLA or PETG | No supports. Short nubs around the outside. |
 | Ticker tab | Root on the bed, leaf standing up | **PETG or TPU** | Do not print this one in PLA. It snaps, or it stalls the motor. |
 
 The 140 mm base needs a bed of at least 150 x 150 mm.
@@ -188,6 +188,8 @@ These values use the default settings. Your actual numbers print in the OpenSCAD
 
 The socket must be deeper than the hex so a top rests on the shoulder and not on the hex tip. That keeps every top at the same height.
 
+A stationary housing rests on a 1.2 mm flat ring just outside the groove. The skirt only locates it and does not touch the bottom of the groove. Inside the skirt, the housing floor climbs at 45° so it prints without supports.
+
 ---
 
 ## The tops
@@ -204,19 +206,23 @@ Open the `.scad` file, pick the part in **Which part**, render (F6), and export 
 If the base walks, use a non-slip mat. The empty rotor is already a little off-balance; the nuts are what you feel.
 
 ### Up and down
-`cam`, `lifter_foot`, `lifter_post`, `lifter_housing`. Three lobes, 8 mm of lift. The follower is off to one side on purpose: a pad in the centre would rest on all three lobes at once and never go down. The foot is a hemisphere, so it rides the ramp on one point.
+`cam`, `lifter_foot`, `lifter_post`, `lifter_housing`. Two lobes, 8 mm of lift. The follower is off to one side on purpose: a pad in the centre would rest on both lobes at once and never go down. The foot is a hemisphere, so it rides the ramp on one point.
 
-1. Glue the post's peg into the foot. The hole is the flat face, not the dome. The dome faces the cam.
-2. Slide the post up into the housing until the foot is below the sleeve. The foot is wider than the sleeve, so once the glue is set the post cannot be pulled out the top.
+Only gravity brings the foot back down. Above about 235 RPM (a little less with sleeve friction) the cam drops away faster than the foot can fall, and the foot starts hammering instead of riding. The OpenSCAD console prints this limit.
+
+1. Stand the housing on its skirt. Drop the post down through the sleeve from the top, peg first, until the cap rests on the sleeve.
+2. Reach in through the open bottom and glue the foot onto the peg. The hole is in the flat face, so the dome points down toward the cam. The foot and the cap are both wider than the sleeve, so once the glue is set the post is captive.
 3. Put the cam on the hex. Set the housing into the locking groove, foot on the cam. A dab of grease on the dome helps.
-4. Use the speed knob toward the slow end. At full speed this is about 10 bounces a second; at the bottom of the knob it is about 3, which is easier to watch.
+4. Use the speed knob toward the slow end. At full speed on the smart build (about 200 RPM) this is about 7 bounces a second; at the bottom of the knob it is about 2, which is easier to watch.
+
+**Simple build:** 4 × AA runs the motor at about 270 RPM, which is over the limit. Use the smart build for this top, or expect the foot to bang on the cam.
 
 ### Tick
 `ticker_rotor`, `ticker_housing`, `ticker_tab`. Ten rounded teeth. The tab is a separate PETG or TPU reed so a broken one is a small reprint. At 200 RPM that is about 33 ticks a second.
 
 1. Print the tab in PETG or TPU, standing up, so the bend runs along the layers.
-2. Drop the tab's block into the slot in the housing. It is a light press.
-3. Put the rotor on the hex, then the housing into the locking groove. The nose of the tab should just reach the teeth. Between teeth there is a clear gap, so each tooth flicks the tab and lets it go.
+2. Drop the tab's block into the slot in the housing. It is a light press. The slot is closed at the back, so the teeth cannot push the tab outward.
+3. Put the rotor on the hex. Turn the rotor by hand so the nose of the tab will drop between two teeth, then set the housing into the locking groove. If the nose lands on a tooth, the housing sits high and does not lock. The nose should just reach the teeth. Between teeth there is a clear gap, so each tooth flicks the tab and lets it go.
 4. If the motor stalls, reprint the tab with **Ticker tab** set to "Light tick".
 
 ### Spin
@@ -237,5 +243,5 @@ The test disc is the spin top. A single bright color on a plain background is th
 - The electronics have no printed mounts yet; use foam tape.
 - The smart-build firmware isn't written yet. The behavior spec above is ready for it.
 - With the 120 mm base or very rounded corners, the front braille labels can crowd each other. OpenSCAD prints a warning when this happens; switch to contracted labels or a larger base.
-- The up-and-down housing is a tall print, and the cam is close to the 60 g guide even though it is balanced. Neither needs support.
+- The up-and-down housing is a tall print, and the cam is close to the 60 g guide even though it is balanced. Neither needs support. The only flat overhang on either housing is the 1.2 mm land beside the skirt.
 - The ticker estimate in the OpenSCAD console assumes PETG. The meshed tooth bites the tab by about 0.6 mm.
